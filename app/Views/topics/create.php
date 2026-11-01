@@ -7,10 +7,10 @@
   <form method="post" action="/topics/create" class="card" style="box-shadow:var(--shadow-lg)">
     <?= $csrf->field() ?>
     <label>Topic Title
-      <input name="title" required placeholder="Enter a clear, descriptive title">
+      <input name="title" required maxlength="180" value="<?= e($form['title'] ?? '') ?>" placeholder="Enter a clear, descriptive title">
     </label>
     <label>Content
-      <textarea name="body" rows="10" required placeholder="Describe your topic in detail... (Markdown supported)"></textarea>
+      <textarea name="body" rows="10" required maxlength="20000" placeholder="Describe your topic in detail... (Markdown supported)"><?= e($form['body'] ?? '') ?></textarea>
     </label>
 
     <fieldset style="border:1px solid var(--border);border-radius:12px;padding:16px;margin:16px 0">
@@ -18,7 +18,7 @@
       <ul class="chips">
         <?php foreach($tags as $t): ?>
           <li><label class="chip" style="transition:all .2s ease">
-            <input type="checkbox" name="tags[]" value="<?= $t['id'] ?>">
+            <input type="checkbox" name="tags[]" value="<?= (int)$t['id'] ?>" <?= in_array((int)$t['id'], $selectedTags, true) ? 'checked' : '' ?>>
             <span style="font-weight:500"><?= e($t['name']) ?></span>
           </label></li>
         <?php endforeach; ?>
