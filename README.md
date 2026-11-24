@@ -1,188 +1,125 @@
 # CoreQA
 
-CoreQA is a lightweight Q&A forum built with native PHP, PDO, SQLite/MySQL, and a small MVC-style application core.
+A native PHP 8.2+ question-and-answer forum for small developer communities, built around PDO and a lightweight MVC-style core.
 
-## Overview
+CoreQA supports question and answer workflows, tags, search, voting, and role-based moderation. It is a small application rather than a hosted community service: you provide the PHP runtime, database, and deployment environment.
 
-CoreQA provides a focused platform for asking questions, sharing answers, organizing discussions, and moderating community content.
+## Features
 
-- User registration and authentication
-- Questions, replies, tags, search, and pagination
-- Markdown content rendering
-- Voting and reputation tracking
-- Moderator and administrator workflows
-- CSRF protection and request throttling
-- SQLite for local development
-- MySQL or MariaDB for production
+- Account registration, login, logout, and password maintenance
+- Questions and answers with ownership-aware editing
+- Tags, search, and bounded pagination
+- A small Markdown subset with escaped HTML and safe link handling
+- Voting with one stored vote per user and answer
+- Moderator and administrator actions guarded on the server
+- CSRF tokens, session cookie protections, and request throttling
+- SQLite for local development and MySQL-compatible schema for production
 
-The application is intentionally dependency-light. The `public/` directory is the web root; application code, configuration, database schema, and runtime state remain outside the public document root.
+## Quick start
+
+Run from the repository root:
+
+\`\`\`bash
+cp .env.example .env
+php -S localhost:8080 -t public
+\`\`\`
+
+Open http://localhost:8080. The first visit initializes the local SQLite schema. Create an account through the registration page to start using the forum. No demo accounts are created automatically.
 
 ## Requirements
 
-- PHP 8.2+
-- PDO with the required database driver
-- Apache 2.4+ with `mod_rewrite`, or Nginx configured to route requests to `public/index.php`
-- SQLite for local development, or MySQL 8+/MariaDB for production
+- PHP 8.2 or newer
+- PDO and the PDO driver for your chosen database
+- Apache with mod_rewrite, Nginx with PHP-FPM, or PHP's built-in server for local development
 
-## Project structure
+## Quick start without Docker
 
-```text
-CoreQA/
-├── app/
-│   ├── Controllers/    Request handling and application flows
-│   ├── Core/           Router, container, views, and shared helpers
-│   ├── Models/         Database-backed domain models
-│   ├── Services/       Authentication, CSRF, caching, Markdown, and rate limiting
-│   └── Views/          PHP templates
-├── api/                API entry point
-├── bin/                Database schema
-├── config/             Application configuration and routes
-├── public/             Web root and static assets
-├── storage/            Runtime state and logs
-└── README.md
-```
+Docker is not part of the current setup. For local development, use the PHP built-in server after creating the local environment file:
 
-## Local development
-
-Clone the repository and create a local environment file:
-
-```bash
-git clone https://github.com/aaqib-hafeez-khan-in/CoreQA.git
-cd CoreQA
+\`\`\`bash
 cp .env.example .env
-```
-
-For a simple local setup, use SQLite and start PHP's development server:
-
-```bash
 php -S localhost:8080 -t public
-```
+\`\`\`
 
-Then open `http://localhost:8080/`.
+Keep the repository root as the working directory so the relative SQLite path resolves to the project storage directory.
 
-The built-in PHP server is for development only. Use a production web server for public deployments.
+## Architecture
 
-## Configuration
+The application uses a small container and router rather than a framework. Controllers coordinate models and services, PDO handles persistence, and PHP views render the response.
 
-Runtime configuration is supplied through environment variables. Use `.env.example` as the starting point and never commit real credentials.
+\`\`\`mermaid
+flowchart TD
+    A[Web server] --> B[public/index.php]
+    B --> C[Session and security headers]
+    C --> D[Router]
+    D --> E[Controller]
+    E --> F[Service or model]
+    F --> G[(PDO database)]
+    E --> H[PHP view]
+    H --> I[HTTP response]
+\`\`\`
 
-Example local configuration:
+See [doc/ARCHITECTURE.md](doc/ARCHITECTURE.md) for the request lifecycle and design details.
 
-```text
-APP_ENV=local
-APP_BASE_URL=/
-SESSION_NAME=coreqa_sid
-CSRF_KEY=replace-with-a-random-secret
-DB_DSN=sqlite:/absolute/path/to/storage/database.sqlite
-DB_USER=
-DB_PASS=
-```
+## Security model
 
-For production, set `APP_ENV=production` and generate a strong random `CSRF_KEY`.
+| Control | Implementation | Verification |
+| --- | --- | --- |
+| Password hashing and rehash | \`app/Models/User.php\`, \`app/Services/Auth.php\` | Reviewed, not covered by tests |
+| Session ID regeneration and cookie flags | \`app/Services/Auth.php\`, \`public/index.php\` | Reviewed, not covered by tests |
+| CSRF token validation and rotation | \`app/Services/Csrf.php\`, state-changing controllers | CSRF regression tests |
+| HTML escaping | \`app/Core/Helpers.php\`, \`app/Services/Markdown.php\` | Helper and Markdown regression tests |
+| Safe Markdown links and images | \`app/Services/Markdown.php\` | Markdown regression tests |
+| Role and ownership checks | Controllers under \`app/Controllers/\` | Reviewed, not covered by tests |
+| Request throttling | \`app/Services/RateLimiter.php\` | Reviewed, not covered by tests |
+| Response headers and generic errors | \`public/index.php\` | Reviewed, not covered by tests |
+| Production CSRF key requirement | \`config/config.php\` | Configuration regression tests |
 
-### MySQL or MariaDB
+See [SECURITY.md](SECURITY.md) for the supported version, reporting process, threat model, and known limitations.
 
-```text
-DB_DSN=mysql:host=127.0.0.1;dbname=coreqa;charset=utf8mb4
-DB_USER=coreqa
-DB_PASS=<secret>
-```
+## Testing
 
-Use a dedicated database account with only the permissions required by CoreQA.
+Run the dependency-free checks with:
 
-## Database setup
+\`\`\`bash
+php bin/lint.php
+php tests/run.php
+\`\`\`
 
-For MySQL or MariaDB, create the database and apply the supplied schema:
+The lint script checks PHP syntax recursively. The test runner covers the Markdown renderer, HTML escaping, CSRF token handling, the router, and the production CSRF-key guard. Database-backed model tests and the rate-limiter window test are not included yet because the current test environment does not provide a PDO database driver.
 
-```bash
-mysql -u coreqa -p coreqa < bin/schema.sql
-```
+## Configuration and deployment
 
-For local SQLite development, the application can initialize the required schema when the database does not already exist.
+Copy \`.env.example\` to \`.env\` and set the environment variables for the deployment. The default SQLite database path is relative to the repository root and is stored under \`storage/\`. For production, set \`APP_ENV=production\`, configure a random \`CSRF_KEY\` of at least 32 characters, use HTTPS, and configure a persistent MySQL or MariaDB database using [bin/schema.sql](bin/schema.sql).
 
-## Web server
+The \`public/\` directory is the document root. Do not expose the repository root, \`.env\`, or \`storage/\` through the web server. See [doc/ARCHITECTURE.md](doc/ARCHITECTURE.md) for the deployment boundary.
 
-The web server must use `public/` as its document root rather than the repository root. This prevents application source, configuration, and environment files from being directly exposed.
+The repository contains a Vercel PHP function entry point in \`api/index.php\` and routing in \`vercel.json\`. The Vercel configuration uses the community \`vercel-php\` runtime. Its SQLite fallback is \`/tmp/database.sqlite\`, which is ephemeral; it is not suitable for persistent forum data. Use an external persistent database for a deployed instance.
 
-For Apache, enable `mod_rewrite` and allow the rewrite configuration in `public/`.
+## Limitations
 
-For Nginx, serve static files from `public/` and route application requests to `public/index.php` through PHP-FPM.
+- The Markdown implementation is a small safe subset, not a complete CommonMark implementation.
+- Email delivery is not implemented by the current mail queue worker.
+- There is no automated database integration suite yet.
+- The current rate limiter stores windows in the application database and is not a distributed rate-limit service.
+- The included Vercel SQLite fallback does not persist data across function instances or deployments.
 
-## Security
+## Roadmap
 
-CoreQA includes a baseline production security model:
+- Add database-backed integration tests for SQLite and MySQL.
+- Add PHPUnit and PHPStan as development-only quality tools.
+- Implement email verification and password reset.
+- Add accepted answers and notifications.
+- Move rate limiting to shared storage for multi-instance deployments.
 
-- Passwords use PHP's password hashing API.
-- Authentication regenerates the session ID after login.
-- Session cookies use `HttpOnly` and `SameSite=Lax`.
-- HTTPS deployments can enable secure cookies and HSTS.
-- State-changing requests use CSRF protection.
-- User-facing HTML is escaped through the shared output helper.
-- Database access uses PDO prepared statements.
-- Login attempts are rate limited.
-- Production deployments do not seed demo accounts.
-- Environment files and runtime state are excluded from source control.
+## Contributing
 
-Production deployments should additionally use HTTPS, a dedicated database account, regular database backups, restricted filesystem permissions, and current supported PHP/security updates.
+See [CONTRIBUTING.md](CONTRIBUTING.md). Contributions should include focused tests and a DCO sign-off.
 
-## Development checks
+## Author
 
-CoreQA does not use GitHub Actions or another repository-hosted CI pipeline. Validation is intentionally performed locally before deployment.
-
-Check PHP syntax with:
-
-```bash
-find . -type f -name '*.php' -not -path './vendor/*' -print0 | xargs -0 -n1 php -l
-```
-
-Run locally with:
-
-```bash
-php -S localhost:8080 -t public
-```
-
-## Deployment
-
-CoreQA requires a PHP runtime and persistent database, so it should be deployed to PHP-capable hosting rather than static hosting.
-
-Recommended production architecture:
-
-```text
-Internet
-   |
- HTTPS
-   |
- Nginx or Apache
-   |
- PHP-FPM
-   |
- CoreQA
-   |
- MySQL/MariaDB
-```
-
-GitHub Pages is not suitable because it cannot execute PHP. Netlify is also not the recommended deployment target for this server-side PHP application.
-
-A small Linux VPS or managed PHP host is a better fit. For a VPS deployment, configure PHP-FPM, Nginx or Apache, MySQL/MariaDB, HTTPS, backups, and `public/` as the document root.
-
-### Production checklist
-
-1. Use PHP 8.2 or newer.
-2. Set `APP_ENV=production`.
-3. Generate a strong `CSRF_KEY`.
-4. Configure a production MySQL/MariaDB database and dedicated user.
-5. Apply `bin/schema.sql`.
-6. Point the web server at `public/`.
-7. Enable HTTPS.
-8. Keep `.env` and runtime storage out of source control.
-9. Configure database backups and appropriate filesystem permissions.
-10. Run the local PHP syntax check before deployment.
-
-## Contact
-
-**Author:** Aaqibhafeez Khan  
-**GitHub:** [@aaqib-hafeez-khan-in](https://github.com/aaqib-hafeez-khan-in)
+Aaqibhafeez Khan · [GitHub](https://github.com/Aaqibhafeezkhan)
 
 ## License
 
-No license is currently declared. Add an explicit license before distributing CoreQA as an open-source project.
+MIT. See [LICENSE](LICENSE).
