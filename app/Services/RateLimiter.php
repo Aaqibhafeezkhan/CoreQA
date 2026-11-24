@@ -1,19 +1,35 @@
 <?php
-
 declare(strict_types=1);
 
 namespace App\Services;
 
+use Closure;
+use InvalidArgumentException;
 use PDO;
 
 class RateLimiter
 {
-    public function __construct(private PDO $db) {}
+    private Closure $clock;
+
+    public function __construct(private PDO $db, ?callable $clock = null)
+    {
+        $this->clock = $clock === null
+            ? static fn(): int => time()
+            : Closure::fromCallable($clock);
+    }
 
     public function hit(string $route, string $ip, int $max, int $windowSec): bool
     {
-        $ipBin = inet_pton($ip) ?: hash('sha256', $ip, true);
-        $windowStart = (int)(time() / $windowSec) * $windowSec;
+        if ($max < 1 || $windowSec < 1) {
+            throw new InvalidArgumentException('Rate limit and window must be positive.');
+        }
+
+        $ipBin = inet_pton($ip);
+        if ($ipBin === false) {
+            $ipBin = substr(hash('sha256', $ip, true), 0, 16);
+        }
+
+        $windowStart = (int)(($this->clock)() / $windowSec) * $windowSec;
         $window = date('Y-m-d H:i:s', $windowStart);
         $driver = $this->db->getAttribute(PDO::ATTR_DRIVER_NAME);
 
@@ -36,11 +52,14 @@ class RateLimiter
                 $this->db->prepare('INSERT INTO rate_limits (ip, route, window_start, hits) VALUES (?, ?, ?, 1)')
                     ->execute([$ipBin, $route, $window]);
             }
+
             $this->db->commit();
             return true;
-        } catch (\Throwable $e) {
-            if ($this->db->inTransaction()) $this->db->rollBack();
-            throw $e;
+        } catch (\Throwable $error) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+            throw $error;
         }
     }
 }
