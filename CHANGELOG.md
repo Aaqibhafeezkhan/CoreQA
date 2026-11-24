@@ -13,6 +13,9 @@ All notable changes to CoreQA are documented here.
 - Added generic error responses and disabled displayed PHP errors in production.
 - Added IP and account-keyed login throttling.
 - Added answer ownership and self-vote checks.
+- Removed automatic local demo-account creation and the destructive legacy SQLite seed script.
+- Resolved relative SQLite paths from the project root and create the storage directory when needed.
+- Added SQLite indexes for topic ordering, answer lookup, and vote lookup.
 - Replaced unverified activity counters with database-backed answer counts.
 - Documented architecture, security reporting, contribution setup, and current deployment limitations.
 - Added the MIT license.

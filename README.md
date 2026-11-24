@@ -24,7 +24,7 @@ cp .env.example .env
 php -S localhost:8080 -t public
 \`\`\`
 
-Open http://localhost:8080. The first visit initializes the local SQLite schema. Create an account through the registration page to start using the forum. No demo accounts are created automatically.
+Open http://localhost:8080. The first visit initializes the local SQLite schema. Create an account through the registration page to start using the forum. Demo accounts are not created automatically.
 
 ## Requirements
 

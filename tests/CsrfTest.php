@@ -21,7 +21,7 @@ return [
         $csrf = new Csrf(str_repeat('k', 64));
         $old = $csrf->token();
         $new = $csrf->rotate();
-        assertNotContains($old, [$new]);
+        assertTrue($old !== $new);
         assertSame(false, $csrf->validate($old));
         assertTrue($csrf->validate($new));
     },
