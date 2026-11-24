@@ -10,12 +10,14 @@ class Topic
     {
         $where = [];
         $params = [];
-        $isSqlite = $db->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite';
+        $driver = $db->getAttribute(PDO::ATTR_DRIVER_NAME);
 
         if ($q) {
-            if ($isSqlite) {
-                $where[] = "(t.title LIKE :q OR t.body LIKE :q)";
-                $params[':q'] = "%$q%";
+            if ($driver === 'sqlite' || $driver === 'pgsql') {
+                $operator = $driver === 'pgsql' ? 'ILIKE' : 'LIKE';
+                $where[] = "(t.title $operator :title_q OR t.body $operator :body_q)";
+                $params[':title_q'] = "%$q%";
+                $params[':body_q'] = "%$q%";
             } else {
                 $where[] = "MATCH(t.title,t.body) AGAINST (:q IN NATURAL LANGUAGE MODE)";
                 $params[':q'] = $q;
@@ -39,11 +41,13 @@ class Topic
     {
         $where = [];
         $params = [];
-        $isSqlite = $db->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite';
+        $driver = $db->getAttribute(PDO::ATTR_DRIVER_NAME);
         if ($q) {
-            if ($isSqlite) {
-                $where[] = "(title LIKE :q OR body LIKE :q)";
-                $params[':q'] = "%$q%";
+            if ($driver === 'sqlite' || $driver === 'pgsql') {
+                $operator = $driver === 'pgsql' ? 'ILIKE' : 'LIKE';
+                $where[] = "(title $operator :title_q OR body $operator :body_q)";
+                $params[':title_q'] = "%$q%";
+                $params[':body_q'] = "%$q%";
             } else {
                 $where[] = "MATCH(title,body) AGAINST (:q IN NATURAL LANGUAGE MODE)";
                 $params[':q'] = $q;
@@ -87,9 +91,15 @@ class Topic
         $tagIds = array_values(array_unique(array_map('intval', $tagIds)));
         try {
             $db->beginTransaction();
-            $stmt = $db->prepare("INSERT INTO topics (user_id, title, slug, body, status, accepted_post_id, created_at, updated_at) VALUES (:uid, :title, :slug, :body, 'open', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)");
+            $sql = "INSERT INTO topics (user_id, title, slug, body, status, accepted_post_id, created_at, updated_at) VALUES (:uid, :title, :slug, :body, 'open', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)";
+            if ($db->getAttribute(PDO::ATTR_DRIVER_NAME) === 'pgsql') {
+                $sql .= ' RETURNING id';
+            }
+            $stmt = $db->prepare($sql);
             $stmt->execute([':uid' => $userId, ':title' => $title, ':slug' => $slug, ':body' => $body]);
-            $topicId = (int)$db->lastInsertId();
+            $topicId = $db->getAttribute(PDO::ATTR_DRIVER_NAME) === 'pgsql'
+                ? (int)$stmt->fetchColumn()
+                : (int)$db->lastInsertId();
             self::replaceTags($db, $topicId, $tagIds);
             $db->commit();
             return $topicId;
@@ -138,7 +148,7 @@ class Topic
     {
         $db->beginTransaction();
         try {
-            $db->prepare("DELETE v FROM votes v JOIN posts p ON p.id = v.post_id WHERE p.topic_id = :id")->execute([':id' => $id]);
+            $db->prepare("DELETE FROM votes WHERE post_id IN (SELECT id FROM posts WHERE topic_id = :id)")->execute([':id' => $id]);
             $db->prepare("DELETE FROM posts WHERE topic_id = :id")->execute([':id' => $id]);
             $db->prepare("DELETE FROM topic_tag WHERE topic_id = :id")->execute([':id' => $id]);
             $db->prepare("DELETE FROM topics WHERE id = :id")->execute([':id' => $id]);

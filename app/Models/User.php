@@ -29,9 +29,14 @@ class User
 
     public static function create(PDO $db, string $name, string $email, string $pass): int
     {
-        $db->prepare("INSERT INTO users(name, email, password_hash, role, created_at) VALUES(?, ?, ?, 'user', CURRENT_TIMESTAMP)")
-            ->execute([$name, $email, password_hash($pass, PASSWORD_DEFAULT)]);
-        return (int)$db->lastInsertId();
+        $sql = $db->getAttribute(PDO::ATTR_DRIVER_NAME) === 'pgsql'
+            ? "INSERT INTO users(name, email, password_hash, role, created_at) VALUES(?, ?, ?, 'user', CURRENT_TIMESTAMP) RETURNING id"
+            : "INSERT INTO users(name, email, password_hash, role, created_at) VALUES(?, ?, ?, 'user', CURRENT_TIMESTAMP)";
+        $statement = $db->prepare($sql);
+        $statement->execute([$name, $email, password_hash($pass, PASSWORD_DEFAULT)]);
+        return $db->getAttribute(PDO::ATTR_DRIVER_NAME) === 'pgsql'
+            ? (int)$statement->fetchColumn()
+            : (int)$db->lastInsertId();
     }
 
     public static function all(PDO $db): array
