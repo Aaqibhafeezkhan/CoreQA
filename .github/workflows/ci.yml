@@ -1,15 +1,57 @@
 name: CI
+
 on:
   push:
     branches: [main]
   pull_request:
+
 permissions:
   contents: read
+
 jobs:
   quality:
+    name: PHP ${{ matrix.php-version }} quality
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version: ['8.2', '8.5']
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: coreqa_test
+          POSTGRES_USER: coreqa_test
+          POSTGRES_PASSWORD: coreqa_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U coreqa_test -d coreqa_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
-      - uses: actions/checkout@v4
-      - run: php -v
-      - run: php bin/lint.php
-      - run: php tests/run.php
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          extensions: pdo_sqlite, pdo_pgsql
+          coverage: none
+
+      - name: Validate Composer manifest
+        run: composer validate --no-check-publish
+
+      - name: Check PHP syntax
+        run: php bin/lint.php
+
+      - name: Run regression tests
+        env:
+          COREQA_TEST_PG_DSN: pgsql:host=127.0.0.1;port=5432;dbname=coreqa_test
+          COREQA_TEST_PG_USER: coreqa_test
+          COREQA_TEST_PG_PASS: coreqa_test
+        run: php tests/run.php

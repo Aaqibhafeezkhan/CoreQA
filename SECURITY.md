@@ -2,7 +2,7 @@
 
 ## Supported version
 
-The \`main\` branch is the supported development version.
+The `main` branch is the supported development version.
 
 ## Reporting a vulnerability
 
@@ -19,8 +19,9 @@ CoreQA is designed to protect account sessions, role-restricted management actio
 ## Known limitations
 
 - The Markdown renderer supports a limited syntax subset and has focused regression tests, not a complete parser conformance suite.
-- Database-backed integration tests are not yet included.
+- Live Neon account integration testing is not yet included; CI exercises PostgreSQL-backed models, rate limiting, and sessions against a temporary PostgreSQL service.
 - The rate limiter uses the configured database and is not shared across separate application databases.
-- The Vercel SQLite fallback uses ephemeral storage and must not be used for persistent production data.
+- Vercel deployments require a persistent PostgreSQL connection supplied by the Neon Marketplace integration; the application does not use ephemeral filesystem storage for database records or login sessions.
+- The Vercel PHP runtime is community-maintained, not an official Vercel runtime.
 - The mail queue worker does not deliver email.
-- The application expects the deployment to keep the repository root outside the public document root and to configure HTTPS in production.
+- The application expects HTTPS in production.

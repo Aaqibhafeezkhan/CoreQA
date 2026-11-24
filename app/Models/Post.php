@@ -8,8 +8,14 @@ class Post
 {
     public static function create(PDO $db, int $topicId, int $userId, string $body): int
     {
-        $db->prepare("INSERT INTO posts(topic_id, user_id, body, created_at, updated_at) VALUES(?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)")->execute([$topicId, $userId, $body]);
-        return (int)$db->lastInsertId();
+        $sql = $db->getAttribute(PDO::ATTR_DRIVER_NAME) === 'pgsql'
+            ? 'INSERT INTO posts(topic_id, user_id, body, created_at, updated_at) VALUES(?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) RETURNING id'
+            : 'INSERT INTO posts(topic_id, user_id, body, created_at, updated_at) VALUES(?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)';
+        $statement = $db->prepare($sql);
+        $statement->execute([$topicId, $userId, $body]);
+        return $db->getAttribute(PDO::ATTR_DRIVER_NAME) === 'pgsql'
+            ? (int)$statement->fetchColumn()
+            : (int)$db->lastInsertId();
     }
 
     public static function find(PDO $db, int $id): ?array
@@ -44,7 +50,13 @@ class Post
 
     public static function recentWithScore(PDO $db, int $limit = 50): array
     {
-        $sql = "SELECT p.id, p.topic_id, p.created_at, u.name, t.title, t.slug, COALESCE(SUM(v.value), 0) AS score FROM posts p JOIN users u ON u.id = p.user_id JOIN topics t ON t.id = p.topic_id LEFT JOIN votes v ON v.post_id = p.id GROUP BY p.id ORDER BY p.created_at DESC LIMIT ?";
+        $sql = "SELECT p.id, p.topic_id, p.created_at, u.name, t.title, t.slug, COALESCE(SUM(v.value), 0) AS score
+            FROM posts p
+            JOIN users u ON u.id = p.user_id
+            JOIN topics t ON t.id = p.topic_id
+            LEFT JOIN votes v ON v.post_id = p.id
+            GROUP BY p.id, p.topic_id, p.created_at, u.name, t.title, t.slug
+            ORDER BY p.created_at DESC LIMIT ?";
         $s = $db->prepare($sql);
         $s->bindValue(1, $limit, PDO::PARAM_INT);
         $s->execute();

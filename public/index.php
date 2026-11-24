@@ -17,25 +17,25 @@ function redirect(string $to): never
     exit;
 }
 
-spl_autoload_register(static function (string $class): void {
-    if (strpos($class, 'App\\') !== 0) {
-        return;
-    }
+require_once __DIR__ . '/../config/autoload.php';
 
-    $path = __DIR__ . '/../' . str_replace('\\', '/', $class) . '.php';
-    if (is_file($path)) {
-        require $path;
-    }
-});
+$isVercel = !empty($_SERVER['VERCEL_DEPLOYMENT']) || (getenv('VERCEL') !== false && getenv('VERCEL') !== '');
 
 try {
     $config = require __DIR__ . '/../config/config.php';
+    $db = (require __DIR__ . '/../config/database.php')($config);
 } catch (Throwable $error) {
-    error_log('CoreQA configuration failure: ' . get_class($error));
-    http_response_code(503);
+    error_log('CoreQA startup failure: ' . get_class($error));
+    http_response_code($isVercel ? 503 : 500);
     header('Content-Type: text/plain; charset=UTF-8');
-    echo 'Application configuration is invalid.';
+    echo $isVercel
+        ? 'CoreQA needs a persistent PostgreSQL database. Connect Neon from the Vercel Marketplace to this project, then redeploy.'
+        : 'The application configuration or database could not be initialized.';
     exit;
+}
+
+if ($db->getAttribute(PDO::ATTR_DRIVER_NAME) === 'pgsql') {
+    session_set_save_handler(new App\Services\DatabaseSessionHandler($db), true);
 }
 
 $secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || $config['env'] === 'production';
@@ -60,7 +60,7 @@ if ($config['env'] === 'production' && $secure && $config['hsts_enabled']) {
 }
 
 try {
-    $container = new App\Core\Container($config);
+    $container = new App\Core\Container($config, $db);
     $router = new App\Core\Router($container);
     (require __DIR__ . '/../config/routes.php')($router);
     $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);

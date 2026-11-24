@@ -11,9 +11,12 @@ class Container
     private array $cfg;
     private array $instances = [];
 
-    public function __construct(array $cfg)
+    public function __construct(array $cfg, ?PDO $db = null)
     {
         $this->cfg = $cfg;
+        if ($db !== null) {
+            $this->instances['db'] = $db;
+        }
     }
 
     public function get(string $id)
@@ -31,7 +34,7 @@ class Container
             'rate' => new \App\Services\RateLimiter($this->get('db')),
             'slug' => new \App\Services\Slug(),
             'mailer' => new \App\Services\Mailer($this->get('db')),
-            'cache' => new \App\Services\Cache(__DIR__ . '/../../storage/topics'),
+            'cache' => new \App\Services\Cache($this->cfg['cache_path'] ?? __DIR__ . '/../../storage/topics'),
             default => throw new \RuntimeException("Unknown service $id"),
         };
     }

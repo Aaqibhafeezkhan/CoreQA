@@ -32,6 +32,18 @@ class RateLimiter
         $windowStart = (int)(($this->clock)() / $windowSec) * $windowSec;
         $window = date('Y-m-d H:i:s', $windowStart);
         $driver = $this->db->getAttribute(PDO::ATTR_DRIVER_NAME);
+        if ($driver === 'pgsql') {
+            $ipBin = '\x' . bin2hex($ipBin);
+            $statement = $this->db->prepare('
+                INSERT INTO rate_limits (ip, route, window_start, hits) VALUES (?, ?, ?, 1)
+                ON CONFLICT (ip, route, window_start)
+                DO UPDATE SET hits = rate_limits.hits + 1
+                WHERE rate_limits.hits < ?
+                RETURNING hits
+            ');
+            $statement->execute([$ipBin, $route, $window, $max]);
+            return $statement->fetchColumn() !== false;
+        }
 
         $this->db->beginTransaction();
         try {

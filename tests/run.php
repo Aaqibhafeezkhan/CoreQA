@@ -2,16 +2,9 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/Assert.php';
+require_once dirname(__DIR__) . '/config/autoload.php';
 
-spl_autoload_register(static function (string $class): void {
-    if (strpos($class, 'App\\') !== 0) {
-        return;
-    }
-    $path = dirname(__DIR__) . '/' . str_replace('\\', '/', $class) . '.php';
-    if (is_file($path)) {
-        require $path;
-    }
-});
+ob_start();
 
 $_SESSION = [];
 $files = glob(__DIR__ . '/*Test.php') ?: [];
@@ -31,6 +24,11 @@ foreach ($files as $file) {
             fwrite(STDERR, "FAIL $name: " . $error->getMessage() . "\n");
         }
     }
+}
+
+$testOutput = ob_get_clean();
+if ($testOutput !== false) {
+    echo $testOutput;
 }
 
 echo "Results: $passed passed, $failed failed.\n";

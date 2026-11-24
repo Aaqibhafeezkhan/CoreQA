@@ -20,8 +20,14 @@ class Tag
 
     public static function create(PDO $db, string $name, string $slug): int
     {
-        $db->prepare("INSERT INTO tags(name, slug) VALUES(?, ?)")->execute([$name, $slug]);
-        return (int)$db->lastInsertId();
+        $sql = $db->getAttribute(PDO::ATTR_DRIVER_NAME) === 'pgsql'
+            ? 'INSERT INTO tags(name, slug) VALUES(?, ?) RETURNING id'
+            : 'INSERT INTO tags(name, slug) VALUES(?, ?)';
+        $statement = $db->prepare($sql);
+        $statement->execute([$name, $slug]);
+        return $db->getAttribute(PDO::ATTR_DRIVER_NAME) === 'pgsql'
+            ? (int)$statement->fetchColumn()
+            : (int)$db->lastInsertId();
     }
 
     public static function delete(PDO $db, int $id): void
