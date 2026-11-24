@@ -1,0 +1,18 @@
+{
+  "name": "aaqibhafeezkhan/coreqa",
+  "description": "A dependency-light PHP question and answer forum",
+  "type": "project",
+  "license": "MIT",
+  "require": {
+    "php": ">=8.2",
+    "ext-pdo": "*"
+  },
+  "scripts": {
+    "lint": "php bin/lint.php",
+    "test": "php tests/run.php",
+    "check": [
+      "@lint",
+      "@test"
+    ]
+  }
+}
